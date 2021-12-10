@@ -80,6 +80,8 @@ import { IRemoteTelemetryService, RemoteNullTelemetryService, RemoteTelemetrySer
 import { IUriIdentityService } from 'vs/platform/uriIdentity/common/uriIdentity';
 import { UriIdentityService } from 'vs/platform/uriIdentity/common/uriIdentityService';
 import { handleGitpodCLIRequest } from 'vs/gitpod/node/customServerIntegration';
+import { TelemetryLogAppender } from 'vs/platform/telemetry/common/telemetryLogAppender';
+import { LoggerService } from 'vs/platform/log/node/loggerService';
 
 const SHUTDOWN_TIMEOUT = 5 * 60 * 1000;
 
@@ -290,14 +292,16 @@ export class RemoteExtensionHostAgentServer extends Disposable {
 
 		let appInsightsAppender: ITelemetryAppender = NullAppender;
 		if (supportsTelemetry(this._productService, this._environmentService)) {
-			if (this._productService.aiConfig && this._productService.aiConfig.asimovKey) {
+			if (this._productService.aiConfig && this._productService.aiConfig.asimovKey !== 'foo') {
 				appInsightsAppender = new AppInsightsAppender(eventPrefix, null, this._productService.aiConfig.asimovKey);
 				this._register(toDisposable(() => appInsightsAppender!.flush())); // Ensure the AI appender is disposed so that it flushes remaining data
 			}
 
+			const loggerService = this._register(new LoggerService(this._logService, fileService));
+
 			const machineId = await getMachineId();
 			const config: ITelemetryServiceConfig = {
-				appenders: [appInsightsAppender],
+				appenders: [appInsightsAppender, new TelemetryLogAppender(loggerService, this._environmentService)],
 				commonProperties: resolveCommonProperties(fileService, release(), hostname(), process.arch, this._productService.commit, this._productService.version + '-remote', machineId, this._productService.msftInternalDomains, this._environmentService.installSourcePath, 'remoteAgent'),
 				piiPaths: [this._environmentService.appRoot]
 			};
